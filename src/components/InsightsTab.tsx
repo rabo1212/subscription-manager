@@ -7,6 +7,29 @@ interface Props {
   onUpdateDowngradeNeeded: (id: string, needed: boolean) => Promise<void>;
 }
 
+// OTT/음악 서비스 특성 정보
+const OTT_TRAITS: Record<string, string> = {
+  'Netflix': '해외 드라마·영화 강세',
+  'YouTube Premium': '광고 제거 + 뮤직',
+  'Disney+': '디즈니·마블·픽사',
+  'TVING': 'tvN·JTBC 드라마',
+  'Wavve': '지상파(KBS·MBC·SBS)',
+  'Watcha': '독립영화·인디',
+  'Apple TV+': '애플 오리지널',
+  'Amazon Prime Video': '아마존 오리지널',
+  'Laftel': '애니메이션 전문',
+};
+
+const MUSIC_TRAITS: Record<string, string> = {
+  'Spotify': '해외 음악·AI 추천',
+  'Apple Music': '고음질·아이폰 연동',
+  'Melon': '국내 차트 1위',
+  'Genie': '국내 가요',
+  'FLO': '국내 가요·음질',
+  'VIBE': '네이버 연동',
+  'Bugs': '국내 가요',
+};
+
 // 서비스별 다운그레이드 질문
 const DOWNGRADE_QUESTIONS: Record<string, Record<string, string>> = {
   'Netflix': {
@@ -81,6 +104,24 @@ function getDowngradeQuestion(serviceName: string, planName: string | null): str
   return DOWNGRADE_QUESTIONS[serviceName]?.[planName] ?? DEFAULT_QUESTION;
 }
 
+function findOttCombo(subs: Subscription[]) {
+  const ottSubs = subs.filter(s => !s.is_custom && serviceData[s.name]?.category === 'OTT');
+  if (ottSubs.length < 2) return null;
+  const sorted = [...ottSubs].sort((a, b) => b.price - a.price);
+  const cheapest = sorted[sorted.length - 1];
+  const savingIfKeepOne = sorted.slice(0, -1).reduce((sum, s) => sum + s.price, 0);
+  return { services: sorted, cheapest, savingIfKeepOne };
+}
+
+function findMusicCombo(subs: Subscription[]) {
+  const musicSubs = subs.filter(s => !s.is_custom && serviceData[s.name]?.category === 'Music');
+  if (musicSubs.length < 2) return null;
+  const sorted = [...musicSubs].sort((a, b) => b.price - a.price);
+  const cheapest = sorted[sorted.length - 1];
+  const savingIfKeepOne = sorted.slice(0, -1).reduce((sum, s) => sum + s.price, 0);
+  return { services: sorted, cheapest, savingIfKeepOne };
+}
+
 function findDuplicates(subs: Subscription[]) {
   const byCategory: Record<string, Subscription[]> = {};
   for (const sub of subs) {
@@ -132,8 +173,13 @@ export default function InsightsTab({ subscriptions, onUpdateUsageStatus, onUpda
   const duplicates = findDuplicates(subscriptions);
   const duplicateSavings = duplicates.reduce((sum, d) => sum + d.potentialSaving, 0);
 
-  // 총 절약
-  const totalSavings = cancelSavings + downgradeSavings + duplicateSavings;
+  // OTT/음악 특화 추천
+  const ottCombo = findOttCombo(subscriptions);
+  const musicCombo = findMusicCombo(subscriptions);
+  const comboSavings = (ottCombo?.savingIfKeepOne || 0) + (musicCombo?.savingIfKeepOne || 0);
+
+  // 총 절약 (중복 감지와 콤보 추천이 겹칠 수 있으므로, 더 큰 값 사용)
+  const totalSavings = cancelSavings + downgradeSavings + Math.max(duplicateSavings, comboSavings);
 
   // 사용 체크
   const usageCheckSubs = subscriptions
@@ -146,15 +192,99 @@ export default function InsightsTab({ subscriptions, onUpdateUsageStatus, onUpda
     <div className="fade-in space-y-10">
 
       {/* 절약 요약 카드 */}
-      <div className="border border-emerald-500/30 bg-emerald-500/5 p-6 text-center">
-        <p className="text-neutral-500 text-xs tracking-widest uppercase mb-3">이번 달 절약 가능</p>
-        <p className="text-4xl font-normal text-emerald-400 mb-1">
+      <div className="border border-emerald-500/30 bg-emerald-500/5 p-6">
+        <p className="text-neutral-500 text-xs tracking-widest uppercase mb-3 text-center">이번 달 절약 가능</p>
+        <p className="text-4xl font-normal text-emerald-400 mb-1 text-center">
           ₩{totalSavings.toLocaleString()}
         </p>
-        <p className="text-neutral-500 text-sm">
+        <p className="text-neutral-500 text-sm text-center mb-4">
           연간 예상 절약: ₩{(totalSavings * 12).toLocaleString()}
         </p>
+        {totalSavings > 0 && (
+          <div className="border-t border-emerald-500/10 pt-3 space-y-1">
+            {cancelSavings > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-neutral-500">미사용 해지</span>
+                <span className="text-red-400">₩{cancelSavings.toLocaleString()}</span>
+              </div>
+            )}
+            {downgradeSavings > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-neutral-500">다운그레이드</span>
+                <span className="text-amber-400">₩{downgradeSavings.toLocaleString()}</span>
+              </div>
+            )}
+            {comboSavings > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-neutral-500">중복 구독 정리</span>
+                <span className="text-orange-400">₩{Math.max(duplicateSavings, comboSavings).toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* OTT 특화 추천 */}
+      {ottCombo && (
+        <div>
+          <p className="text-neutral-500 text-xs tracking-widest uppercase mb-4">OTT 조합 분석</p>
+          <div className="border border-red-500/20 bg-red-500/5 p-5">
+            <p className="text-sm text-red-400 mb-3">
+              영상 서비스 {ottCombo.services.length}개 동시 구독 중
+            </p>
+            <div className="space-y-2 mb-4">
+              {ottCombo.services.map(s => (
+                <div key={s.id} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-neutral-300">{s.name}</span>
+                    <span className="text-neutral-600 text-xs">{OTT_TRAITS[s.name] || ''}</span>
+                  </div>
+                  <span className="text-neutral-500">₩{s.price.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-red-500/10 pt-3">
+              <p className="text-sm text-neutral-400">
+                1개만 남기면 월 <span className="text-red-400 font-medium">₩{ottCombo.savingIfKeepOne.toLocaleString()}</span> 절약
+              </p>
+              <p className="text-xs text-neutral-600 mt-1">
+                연간 ₩{(ottCombo.savingIfKeepOne * 12).toLocaleString()} 절약 가능
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 음악 특화 추천 */}
+      {musicCombo && (
+        <div>
+          <p className="text-neutral-500 text-xs tracking-widest uppercase mb-4">음악 조합 분석</p>
+          <div className="border border-orange-500/20 bg-orange-500/5 p-5">
+            <p className="text-sm text-orange-400 mb-3">
+              음악 서비스 {musicCombo.services.length}개 동시 구독 중
+            </p>
+            <div className="space-y-2 mb-4">
+              {musicCombo.services.map(s => (
+                <div key={s.id} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-neutral-300">{s.name}</span>
+                    <span className="text-neutral-600 text-xs">{MUSIC_TRAITS[s.name] || ''}</span>
+                  </div>
+                  <span className="text-neutral-500">₩{s.price.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-orange-500/10 pt-3">
+              <p className="text-sm text-neutral-400">
+                1개로 통합 시 월 <span className="text-orange-400 font-medium">₩{musicCombo.savingIfKeepOne.toLocaleString()}</span> 절약
+              </p>
+              <p className="text-xs text-neutral-600 mt-1">
+                연간 ₩{(musicCombo.savingIfKeepOne * 12).toLocaleString()} 절약 가능
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 절약 리포트 */}
       {(cancelSubs.length > 0 || confirmedDowngrades.length > 0 || keepSubs.length > 0 || keepByDowngrade.length > 0) && (

@@ -1,4 +1,4 @@
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine } from 'recharts';
 import { Subscription } from '../types';
 import { serviceData, categoryNames } from '../serviceData';
 
@@ -18,13 +18,43 @@ const CATEGORY_COLORS: Record<string, string> = {
   Gaming: '#22c55e',
   Cloud: '#06b6d4',
   Fitness: '#f43f5e',
+  Delivery: '#fb923c',
+  Telecom: '#a855f7',
+  Webtoon: '#2dd4bf',
   custom: '#737373',
 };
+
+const KR_AVG_MONTHLY = 125000;
+
+function buildMonthlyTrend(subscriptions: Subscription[]) {
+  const now = new Date();
+  const months: { label: string; total: number }[] = [];
+
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const label = `${d.getMonth() + 1}월`;
+    const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+
+    const activeSubs = subscriptions.filter((s) => {
+      const created = new Date(s.created_at);
+      return created <= endOfMonth;
+    });
+
+    const total = activeSubs.reduce((sum, s) => sum + s.price, 0);
+    months.push({ label, total });
+  }
+
+  return months;
+}
 
 export default function SpendingAnalysis({ subscriptions }: Props) {
   const totalMonthly = subscriptions.reduce((sum, s) => sum + s.price, 0);
   const totalYearly = totalMonthly * 12;
   const avgPerSub = subscriptions.length > 0 ? Math.round(totalMonthly / subscriptions.length) : 0;
+
+  const monthlyTrend = buildMonthlyTrend(subscriptions);
+  const prevMonth = monthlyTrend.length >= 2 ? monthlyTrend[monthlyTrend.length - 2].total : 0;
+  const diff = totalMonthly - prevMonth;
 
   const categoryData = Object.entries(
     subscriptions.reduce<Record<string, number>>((acc, sub) => {
@@ -62,6 +92,11 @@ export default function SpendingAnalysis({ subscriptions }: Props) {
           <div className="border border-neutral-800 p-4">
             <p className="text-neutral-600 text-xs mb-1">월간</p>
             <p className="text-lg font-normal">₩{totalMonthly.toLocaleString()}</p>
+            {diff !== 0 && (
+              <p className={`text-xs mt-1 ${diff > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                {diff > 0 ? '▲' : '▼'} ₩{Math.abs(diff).toLocaleString()}
+              </p>
+            )}
           </div>
           <div className="border border-neutral-800 p-4">
             <p className="text-neutral-600 text-xs mb-1">연간</p>
@@ -71,6 +106,92 @@ export default function SpendingAnalysis({ subscriptions }: Props) {
             <p className="text-neutral-600 text-xs mb-1">평균</p>
             <p className="text-lg font-normal">₩{avgPerSub.toLocaleString()}</p>
           </div>
+        </div>
+      </div>
+
+      {/* 한국 평균 벤치마크 */}
+      <div className="border border-neutral-800 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-neutral-500 text-xs tracking-widest uppercase">한국 평균 대비</p>
+          <span className="text-xs text-neutral-600">한국 평균 ₩{KR_AVG_MONTHLY.toLocaleString()}/월</span>
+        </div>
+        <div className="h-3 bg-neutral-900 rounded-full overflow-hidden relative">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${Math.min((totalMonthly / (KR_AVG_MONTHLY * 1.5)) * 100, 100)}%`,
+              backgroundColor: totalMonthly > KR_AVG_MONTHLY ? '#ef4444' : '#22c55e',
+            }}
+          />
+          <div
+            className="absolute top-0 h-full w-0.5 bg-neutral-400"
+            style={{ left: `${(KR_AVG_MONTHLY / (KR_AVG_MONTHLY * 1.5)) * 100}%` }}
+          />
+        </div>
+        <div className="flex justify-between mt-2">
+          <span className={`text-sm ${totalMonthly <= KR_AVG_MONTHLY ? 'text-emerald-400' : 'text-red-400'}`}>
+            ₩{totalMonthly.toLocaleString()}
+          </span>
+          <span className="text-xs text-neutral-600">
+            평균보다 {totalMonthly > KR_AVG_MONTHLY
+              ? `₩${(totalMonthly - KR_AVG_MONTHLY).toLocaleString()} 더 써요`
+              : totalMonthly < KR_AVG_MONTHLY
+                ? `₩${(KR_AVG_MONTHLY - totalMonthly).toLocaleString()} 절약 중`
+                : '비슷해요'}
+          </span>
+        </div>
+      </div>
+
+      {/* 월별 추이 차트 */}
+      <div>
+        <p className="text-neutral-500 text-xs tracking-widest uppercase mb-4">최근 6개월 추이</p>
+        <div style={{ height: 200 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={monthlyTrend} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+              <defs>
+                <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#737373', fontSize: 12 }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#525252', fontSize: 11 }}
+                tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                width={40}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#171717',
+                  border: '1px solid #262626',
+                  borderRadius: 4,
+                  color: '#e5e5e5',
+                  fontSize: 13,
+                }}
+                formatter={(value: number) => [`₩${value.toLocaleString()}`, '월 지출']}
+              />
+              <ReferenceLine
+                y={KR_AVG_MONTHLY}
+                stroke="#525252"
+                strokeDasharray="4 4"
+                label={{ value: '한국 평균', fill: '#525252', fontSize: 10, position: 'right' }}
+              />
+              <Area
+                type="monotone"
+                dataKey="total"
+                stroke="#8b5cf6"
+                strokeWidth={2}
+                fill="url(#colorTotal)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
@@ -140,6 +261,24 @@ export default function SpendingAnalysis({ subscriptions }: Props) {
           </div>
         </div>
       )}
+
+      {/* 해지 시 절약 시뮬레이션 */}
+      <div>
+        <p className="text-neutral-500 text-xs tracking-widest uppercase mb-4">해지하면 얼마나?</p>
+        <div className="space-y-2">
+          {[...subscriptions]
+            .sort((a, b) => b.price - a.price)
+            .slice(0, 5)
+            .map((sub) => (
+              <div key={sub.id} className="flex items-center justify-between text-sm border border-neutral-800/50 p-3">
+                <span className="text-neutral-300">{sub.name}</span>
+                <span className="text-emerald-400/80">
+                  연 ₩{(sub.price * 12).toLocaleString()} 절약
+                </span>
+              </div>
+            ))}
+        </div>
+      </div>
 
       {/* 일 평균 지출 */}
       <div className="border border-neutral-800 p-6 text-center">
