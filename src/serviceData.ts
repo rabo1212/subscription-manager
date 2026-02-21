@@ -30,7 +30,11 @@ export const serviceData: Record<string, ServiceInfo> = {
   'SSG 유니버스클럽': { category: 'Shopping', plans: [{ name: '연간', price: 30000 }, { name: '연간 (할인)', price: 4900 }] },
   '11번가 우주패스': { category: 'Shopping', plans: [{ name: '월간', price: 4900 }] },
   'Kurly 컬리패스': { category: 'Shopping', plans: [{ name: '월간', price: 4900 }] },
-  '배민클럽': { category: 'Shopping', plans: [{ name: '월간', price: 3990 }, { name: '월간 (프로모션)', price: 1990 }] },
+  '배민클럽': { category: 'Delivery', plans: [{ name: '월간', price: 3990 }, { name: '월간 (프로모션)', price: 1990 }] },
+  '쿠팡이츠 와우': { category: 'Delivery', plans: [{ name: '로켓와우 포함', price: 0 }] },
+  '요기패스': { category: 'Delivery', plans: [{ name: '월간', price: 4900 }] },
+  '요기패스X': { category: 'Delivery', plans: [{ name: '월간', price: 2900 }] },
+  '땡겨요 패스': { category: 'Delivery', plans: [{ name: '월간', price: 1900 }] },
   'ChatGPT': { category: 'AI', plans: [{ name: 'Plus', price: 29000 }, { name: 'Pro', price: 290000 }] },
   'Gemini': { category: 'AI', plans: [{ name: 'AI Pro', price: 27000 }, { name: 'AI Ultra', price: 340000 }] },
   'Claude': { category: 'AI', plans: [{ name: 'Pro', price: 27000 }, { name: 'Max 5x', price: 135000 }, { name: 'Max 20x', price: 270000 }] },
@@ -71,6 +75,7 @@ export const categoryNames: Record<string, string> = {
   'OTT': '영상', 'Music': '음악', 'Shopping': '쇼핑', 'AI': 'AI',
   'Productivity': '업무', 'Design': '디자인', 'Dev': '개발',
   'Content': '콘텐츠', 'Gaming': '게임', 'Cloud': '클라우드', 'Fitness': '건강',
+  'Delivery': '배달',
 };
 
 export interface CancellationInfo {
