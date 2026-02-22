@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from './services/supabaseClient';
 import { Subscription, SubscriptionInsert } from './types';
@@ -6,12 +6,18 @@ import AuthForm from './components/AuthForm';
 import AdminPanel from './components/AdminPanel';
 import SpendingAnalysis from './components/SpendingAnalysis';
 import InsightsTab from './components/InsightsTab';
+import NotificationCenter from './components/NotificationCenter';
 import LandingPage from './components/LandingPage';
 import TermsPage from './components/TermsPage';
 import PrivacyPage from './components/PrivacyPage';
 import RefundPage from './components/RefundPage';
 import { serviceData, categoryNames, calculateDday, calculateTrialDaysLeft } from './serviceData';
 import { cancellationGuides } from './cancellationData';
+import {
+  NotificationItem,
+  generateNotifications,
+  triggerDailyBrowserNotifications,
+} from './services/notificationService';
 import type { User } from '@supabase/supabase-js';
 import type { ServicePlan } from './serviceData';
 
@@ -56,7 +62,9 @@ function MainApp() {
   // 무료체험
   const [isTrial, setIsTrial] = useState(false);
   const [trialEndDate, setTrialEndDate] = useState('');
-  const [showTrialAlert, setShowTrialAlert] = useState(true);
+
+  // 알림
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   // 플랜 (Free/Pro)
   const [isPro, setIsPro] = useState(() => localStorage.getItem('isPro') === 'true');
@@ -84,11 +92,17 @@ function MainApp() {
     (a, b) => calculateDday(a.billing_day) - calculateDday(b.billing_day)
   );
 
-  const expiringTrials = subscriptions.filter(s => {
-    if (!s.is_trial || !s.trial_end_date) return false;
-    const daysLeft = calculateTrialDaysLeft(s.trial_end_date);
-    return daysLeft >= 0 && daysLeft <= 3;
-  });
+  // 알림 생성 + 브라우저 알림 트리거
+  const refreshNotifications = useCallback(() => {
+    const items = generateNotifications(subscriptions);
+    setNotifications(items);
+    return items;
+  }, [subscriptions]);
+
+  useEffect(() => {
+    const items = refreshNotifications();
+    triggerDailyBrowserNotifications(items);
+  }, [refreshNotifications]);
 
   // Auth
   useEffect(() => {
@@ -368,6 +382,10 @@ function MainApp() {
             )}
           </div>
           <div className="flex items-center gap-4">
+            <NotificationCenter
+              notifications={notifications}
+              onRefresh={refreshNotifications}
+            />
             {!isGuest && (
               <button
                 onClick={() => setShowPlanModal(true)}
@@ -419,28 +437,23 @@ function MainApp() {
             </div>
           ) : (
         <main className="px-8 py-10 max-w-md mx-auto">
-          {/* 무료체험 만료 임박 알림 */}
-          {showTrialAlert && expiringTrials.length > 0 && (
-            <div className="mb-6 border border-emerald-500/30 bg-emerald-500/5 p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-emerald-400 text-xs tracking-widest uppercase">무료체험 만료 임박</p>
-                <button onClick={() => setShowTrialAlert(false)} className="text-neutral-600 hover:text-white transition-colors">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              {expiringTrials.map(trial => {
-                const daysLeft = calculateTrialDaysLeft(trial.trial_end_date!);
-                return (
-                  <div key={trial.id} className="flex items-center justify-between py-2">
-                    <span className="text-sm">{trial.name}</span>
-                    <span className={`text-sm ${daysLeft === 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                      {daysLeft === 0 ? '오늘 만료!' : `${daysLeft}일 남음`}
-                    </span>
-                  </div>
-                );
-              })}
+          {/* 알림 배너 — 읽지 않은 알림이 있을 때 */}
+          {notifications.filter(n => !n.read).length > 0 && (
+            <div className="mb-6 border border-amber-500/30 bg-amber-500/5 p-4">
+              <p className="text-amber-400 text-xs tracking-widest uppercase mb-2">알림</p>
+              {notifications.filter(n => !n.read).slice(0, 3).map(n => (
+                <div key={n.id} className="flex items-center justify-between py-1.5">
+                  <span className="text-sm">{n.subscriptionName}</span>
+                  <span className={`text-xs font-medium ${
+                    n.daysLeft === 0 ? 'text-red-400' : n.daysLeft <= 1 ? 'text-red-400' : n.type === 'trial' ? 'text-emerald-400' : 'text-amber-400'
+                  }`}>
+                    {n.type === 'trial'
+                      ? (n.daysLeft === 0 ? '체험 오늘 만료' : `체험 D-${n.daysLeft}`)
+                      : (n.daysLeft === 0 ? '오늘 결제' : `결제 D-${n.daysLeft}`)
+                    }
+                  </span>
+                </div>
+              ))}
             </div>
           )}
 
