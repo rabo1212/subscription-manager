@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
 
 export default function AuthForm() {
+  const navigate = useNavigate();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -43,7 +45,12 @@ export default function AuthForm() {
   return (
     <div className="min-h-screen bg-neutral-950 flex items-center justify-center px-8">
       <div className="w-full max-w-sm fade-in">
-        <h1 className="text-sm tracking-[0.3em] uppercase text-white font-semibold mb-1">MITDOK</h1>
+        <button
+          onClick={() => navigate('/')}
+          className="text-sm tracking-[0.3em] uppercase text-white font-semibold mb-1 hover:text-neutral-300 transition-colors cursor-pointer"
+        >
+          ← MITDOK
+        </button>
         <p className="text-neutral-500 text-sm mb-10">
           {isSignUp ? '회원가입' : '로그인'}하고 구독을 관리하세요
         </p>
